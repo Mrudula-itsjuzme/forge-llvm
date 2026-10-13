@@ -33,6 +33,7 @@ speedup claims, so timings are not presented as performance results.
 
 ## Remaining evidence
 
-- GitHub Actions has not run until the repository is published.
+- GitHub Actions run `38395465720` independently passed build and test on the
+  initial published commit.
 - A full benchmark campaign on the target host is not yet complete.
 - Alive2 or another formal refinement checker has not been run.

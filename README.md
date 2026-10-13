@@ -10,6 +10,7 @@ behavior, correctness evidence, and performance measurements.
 > including 100 seeded generated verifier cases. A three-trial benchmark smoke
 > run completed all six pipelines with matching outputs. This short smoke run
 > is pipeline validation, not statistically meaningful performance evidence.
+> GitHub Actions independently passed the LLVM 18 build and all tests.
 
 ## Transformation
 
