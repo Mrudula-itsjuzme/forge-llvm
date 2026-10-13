@@ -1,144 +1,145 @@
 # Forge: LLVM CPU Optimization Toolkit
 
-Forge is an out-of-tree LLVM New Pass Manager plugin that conservatively
-eliminates redundant integer arithmetic inside a basic block. It is a compact,
-auditable compiler-engineering project: the repository separates implemented
-behavior, correctness evidence, and performance measurements.
+Forge is a modular, out-of-tree LLVM 18 New Pass Manager toolkit for studying
+conservative CPU middle-end transformations and their performance consequences.
+It implements three distinct passes:
 
-> Validation status (2026-10-13): the plugin compiled with LLVM/Clang 18.1.3
-> in the repository's Ubuntu 24.04 container. All four CTest groups passed,
-> including 100 seeded generated verifier cases. A three-trial benchmark smoke
-> run completed all six pipelines with matching outputs. This short smoke run
-> is pipeline validation, not statistically meaningful performance evidence.
-> GitHub Actions independently passed the LLVM 18 build and all tests.
+| Pipeline name | Scope | Safety boundary |
+|---|---|---|
+| `forge-local-cse` | One basic block | Exact integer expressions and flags |
+| `forge-global-cse` | Dominated CFG regions | Scoped dominator-tree availability |
+| `forge-licm` | Innermost loops | Preheader + invariant operands + safe speculation |
 
-## Transformation
+The older `forge-redundant-expr-elim` spelling remains an alias for LocalCSE.
+Forge is intentionally narrower than LLVM EarlyCSE, GVN, and LICM and does not
+claim to replace them.
 
-```llvm
-; before
-%x = add i32 %a, %b
-%y = add i32 %b, %a
-%r = mul i32 %x, %y
+## Current evidence
 
-; after
-%x = add i32 %a, %b
-%r = mul i32 %x, %x
-```
+Forge v2 was built with LLVM/Clang 18.1.3 in Ubuntu 24.04. The current local
+feature branch passes nine CTest groups:
 
-Forge considers LLVM integer `BinaryOperator` instructions. A prior expression
-is reused only when it occurs earlier in the same basic block, has the same
-opcode, result type, operands, and semantic flags, and neither operand is a
-literal `undef` or `poison`. Operands may be reversed only for an operation LLVM
-marks commutative. The replacement therefore dominates every replaced use.
+- pass-specific FileCheck and verifier regressions;
+- positive and prohibited dominance/loop transformations;
+- 100 generated verifier cases with seed `20261013`; and
+- executable differential comparison over 36 boundary combinations plus 2,000
+  deterministic generated inputs.
 
-Bitwise `or` is excluded for cross-version safety because recent LLVM versions
-can attach additional `disjoint` semantics to it.
-
-Memory writes and calls do not kill entries because eligible expressions read
-only immutable SSA operands and no memory. Forge does not perform cross-block
-value numbering, floating-point CSE, load CSE, algebraic rewriting, or constant
-folding.
-
-### Why the narrow rule is safe
-
-- SSA values do not change after definition.
-- Earlier instructions in one basic block dominate later instructions.
-- `isSameOperationAs` prevents reuse across different `nsw`, `nuw`, or `exact`
-  semantics.
-- Direct `undef` operands are rejected because each use may choose a different
-  value. Explicit poison is rejected to keep the policy easy to audit.
-- Only side-effect-free LLVM integer binary operators are candidates.
-
-This is testing evidence and a design argument, not a formal proof.
+Static code generation succeeded for x86-64-v3, AArch64 Neoverse V2, and
+Armv9-A+SVE2. `llvm-mca` succeeded for the x86-64 and Neoverse V2 scheduling
+models. A short six-pipeline, seven-kernel HPC smoke campaign produced matching
+validation digests. Those are workflow checks, not credible speedup results or
+Grace hardware measurements. Alive2 has not yet been run.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  IR[LLVM IR] --> OPT[opt New Pass Manager]
-  PLUGIN[ForgePass plugin] --> OPT
-  OPT --> SCAN[Per-basic-block scan]
-  SCAN --> KEY[Canonical expression key]
-  KEY --> CHECK[Exact operation and flag check]
-  CHECK -->|match| REUSE[Replace uses and erase duplicate]
-  CHECK -->|no match| RECORD[Record available expression]
-  REUSE --> VERIFY[LLVM verifier]
-  RECORD --> VERIFY
+  IR[LLVM IR] --> PM[New Pass Manager]
+  REG[Plugin registration] --> PM
+  POLICY[Shared expression safety policy] --> LCSE[LocalCSE]
+  POLICY --> GCSE[Dominance-aware GlobalCSE]
+  POLICY --> LICM[Restricted LICM]
+  PM --> LCSE --> GCSE --> LICM --> V[LLVM verifier]
+  V --> DIFF[Differential execution]
+  V --> BACKEND[x86-64 / AArch64 codegen]
+  V --> BENCH[HPC campaign]
 ```
 
-## Prerequisites and build
+The shared policy in `lib/Expression.cpp` rejects floating point, memory
+operations, literal poison/undef, constants containing poison/undef, and
+bitwise `or` (whose `disjoint` semantics vary across LLVM versions). It compares
+`nuw`, `nsw`, and `exact` explicitly.
 
-Use one consistent LLVM installation (LLVM 18 is used in CI):
+GlobalCSE walks the dominator tree with scoped available-expression stacks. It
+does not implement PHI translation, partial redundancy elimination, or memory
+value numbering. Forge LICM moves only eligible integer binary operations from
+innermost loops when a preheader exists and LLVM reports speculation safe.
+
+See [correctness](docs/CORRECTNESS.md), [workflow](docs/DEVELOPMENT_WORKFLOW.md),
+and the [v1 audit](docs/AUDIT_V1.md).
+
+## Build and test
 
 ```bash
 cmake -S . -B build -G Ninja \
   -DLLVM_DIR="$(llvm-config --cmakedir)" \
+  -DCMAKE_CXX_COMPILER=clang++ \
   -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Run the pass manually (the shared-library suffix is platform-dependent):
+The repository also supplies `CMakePresets.json` for the Ubuntu LLVM 18
+container and `Dockerfile.ci` for reproducibility.
 
 ```bash
 opt -load-pass-plugin ./build/lib/ForgePass.so \
-  -passes='forge-redundant-expr-elim,verify' -S input.ll -o output.ll
+  -passes='forge-local-cse,forge-global-cse,forge-licm,verify' \
+  -S input.ll -o output.ll
+
+./build/tools/forge-analyze/forge-analyze input.ll
 ```
 
-## Validation
+`forge-analyze` emits JSON containing function, block, instruction, eligible
+expression, and local opportunity counts plus the configured pipeline.
 
-The CTest suite runs:
-
-- FileCheck cases for repetition, commutativity, constants, branches, loops,
-  signed/unsigned flags, literal undef, and intervening effects;
-- LLVM's verifier after every transformation; and
-- 100 deterministic generated IR cases with seed `20261013`.
-
-The generated cases exercise construction and verifier validity. They are not a
-formal equivalence proof. Executable equivalence is also checked by the
-benchmark harness, which refuses to report timings when outputs differ.
-
-## Benchmarking
-
-After building, run:
+## Static backend analysis
 
 ```bash
-python3 benchmark/run.py --plugin ./build/lib/ForgePass.so
+python3 analysis/analyze_backends.py \
+  --clang clang-18 --llvm-mca /usr/lib/llvm-18/bin/llvm-mca
 ```
 
-The harness builds paired `O0`, `O2`, and `O3` pipelines with and without Forge,
-runs nine trials by default, checks identical output, and records raw timings,
-median runtime, optimizer time, textual IR instruction count, and binary size in
-`benchmark/results/latest.json`. Results are intentionally absent until they
-are measured on real hardware.
+This produces ignored raw artifacts and a manifest under `analysis/results/`.
+It never executes AArch64 output on an x86-64 host. See
+[AARCH64.md](docs/AARCH64.md) for the evidence boundary.
 
-LLVM's standard optimization pipelines already contain stronger mechanisms
-such as EarlyCSE and GVN. Forge is therefore expected to help mainly in a
-minimal pipeline; at `-O2`/`-O3`, neutral results are the likely honest outcome.
+## HPC benchmark campaign
+
+```bash
+python3 benchmark/scripts/run_campaign.py \
+  --clang clang-18 --opt opt \
+  --plugin ./build/lib/ForgePass.so \
+  --size 200000 --trials 9
+```
+
+The campaign exercises matrix multiplication, reduction, dot product, stencil,
+strided traversal, repeated arithmetic, and a loop recurrence. It records raw
+trial timings, optimizer time, binary size, toolchain and host metadata, pass
+pipelines, and validation digests for minimal, O2, and O3 baselines with and
+without Forge. Benchmark output is rejected if any pipeline's digest differs.
+
+Performance claims require a full campaign on named native hardware. CI is for
+correctness and build reproducibility, not benchmark comparisons.
 
 ## Repository map
 
-- `lib/ForgePass.cpp` — pass implementation and plugin registration
-- `test/ir/` — FileCheck regression tests
-- `test/randomized_ir.py` — reproducible generated verifier cases
-- `benchmark/` — CPU workload and measurement harness
-- `.github/workflows/ci.yml` — LLVM 18 build and test job
+- `include/forge/` — pass and shared expression contracts
+- `lib/` — plugin registration and three pass implementations
+- `tools/forge-analyze/` — native LLVM IR reporting CLI
+- `test/` — structural, generated, and differential validation
+- `analysis/` — x86-64/AArch64 assembly and `llvm-mca` workflow
+- `benchmark/` — HPC kernels and reproducible campaign scripts
+- `docs/` — audit, correctness, architecture, workflow, and interview material
 
-## Limitations and future work
+## Known limitations
 
-Forge is local to a basic block and intentionally does not reason about memory,
-dominance across blocks, floating-point flags, or expression profitability.
-Future work should start with Alive2-checked transformations and differential
-testing before broadening scope. A useful next engineering step is comparing
-compile-time and hit-rate data directly with LLVM EarlyCSE rather than adding
-more transformations speculatively.
+- No memory expression elimination, floating-point transformations, PHI
+  translation, PRE, or complete GVN.
+- LICM neither creates preheaders nor moves memory operations.
+- No general-purpose loop unroller; adding one before stronger correctness
+  evidence would broaden risk without deepening the core project.
+- Alive2 refinement checks are not yet integrated.
+- No native AArch64 or NVIDIA Grace measurements have been made.
 
-## Resume bullet (provisional)
+## Resume bullet
 
-Built an out-of-tree C++17 LLVM New Pass Manager plugin for conservative
-same-basic-block integer expression elimination, with flag-aware matching,
-FileCheck/verifier regressions, deterministic generated tests, reproducible
-benchmarks, an Ubuntu validation container, and LLVM 18 CI.
+Developed a modular C++17 LLVM 18 optimization toolkit with flag-aware local
+CSE, dominator-tree global CSE, and speculation-checked integer LICM; added
+FileCheck/verifier regressions, seeded and differential execution tests,
+AArch64/Neoverse static analysis, a seven-kernel HPC campaign, a native IR
+analysis CLI, container builds, and CI-ready reproducibility.
 
 ## License
 

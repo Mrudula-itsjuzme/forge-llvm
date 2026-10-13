@@ -1,0 +1,43 @@
+{
+  "version": 6,
+  "configurePresets": [
+    {
+      "name": "llvm18-container",
+      "displayName": "LLVM 18 container release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/preset-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "clang++-18",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "LLVM_DIR": "/usr/lib/llvm-18/lib/cmake/llvm"
+      }
+    },
+    {
+      "name": "llvm18-container-debug",
+      "inherits": "llvm18-container",
+      "displayName": "LLVM 18 container debug",
+      "binaryDir": "${sourceDir}/build/preset-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    {"name": "release", "configurePreset": "llvm18-container"},
+    {"name": "debug", "configurePreset": "llvm18-container-debug"}
+  ],
+  "testPresets": [
+    {
+      "name": "release",
+      "configurePreset": "llvm18-container",
+      "output": {"outputOnFailure": true}
+    },
+    {
+      "name": "debug",
+      "configurePreset": "llvm18-container-debug",
+      "output": {"outputOnFailure": true}
+    }
+  ]
+}
+
