@@ -1,0 +1,7 @@
+/build*/
+/benchmark/results/
+*.profraw
+*.profdata
+.venv/
+__pycache__/
+
