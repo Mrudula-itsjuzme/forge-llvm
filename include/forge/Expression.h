@@ -1,9 +1,17 @@
 #pragma once
 
 #include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Instructions.h"
 
 namespace forge {
+
+enum class ExpressionRejectionReason {
+  Eligible,
+  NonIntegerType,
+  UnsupportedOrSemantics,
+  UndefOrPoisonOperand,
+};
 
 struct ExpressionKey {
   unsigned Opcode;
@@ -22,6 +30,9 @@ struct ExpressionKeyInfo {
 };
 
 bool isEligibleIntegerExpression(const llvm::BinaryOperator &BO);
+ExpressionRejectionReason
+classifyIntegerExpression(const llvm::BinaryOperator &BO);
+llvm::StringRef rejectionReasonName(ExpressionRejectionReason Reason);
 ExpressionKey makeExpressionKey(const llvm::BinaryOperator &BO);
 bool haveSameSemanticFlags(const llvm::BinaryOperator &A,
                            const llvm::BinaryOperator &B);
