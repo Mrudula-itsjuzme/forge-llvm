@@ -1,7 +1,7 @@
 /build*/
 /benchmark/results/
+/analysis/results/
 *.profraw
 *.profdata
 .venv/
 __pycache__/
-

@@ -22,11 +22,10 @@ struct ExpressionKeyInfo {
 };
 
 bool isEligibleIntegerExpression(const llvm::BinaryOperator &BO);
-ExpressionKey makeExpressionKey(llvm::BinaryOperator &BO);
+ExpressionKey makeExpressionKey(const llvm::BinaryOperator &BO);
 bool haveSameSemanticFlags(const llvm::BinaryOperator &A,
                            const llvm::BinaryOperator &B);
 bool areEquivalentExpressions(const llvm::BinaryOperator &A,
                               const llvm::BinaryOperator &B);
 
 } // namespace forge
-

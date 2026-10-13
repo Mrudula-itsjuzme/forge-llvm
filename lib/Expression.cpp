@@ -52,7 +52,7 @@ bool isEligibleIntegerExpression(const BinaryOperator &BO) {
   return true;
 }
 
-ExpressionKey makeExpressionKey(BinaryOperator &BO) {
+ExpressionKey makeExpressionKey(const BinaryOperator &BO) {
   Value *LHS = BO.getOperand(0);
   Value *RHS = BO.getOperand(1);
   if (BO.isCommutative() && std::less<Value *>{}(RHS, LHS))
@@ -79,9 +79,7 @@ bool areEquivalentExpressions(const BinaryOperator &A,
                               const BinaryOperator &B) {
   if (!A.isSameOperationAs(&B) || !haveSameSemanticFlags(A, B))
     return false;
-  return makeExpressionKey(const_cast<BinaryOperator &>(A)) ==
-         makeExpressionKey(const_cast<BinaryOperator &>(B));
+  return makeExpressionKey(A) == makeExpressionKey(B);
 }
 
 } // namespace forge
-

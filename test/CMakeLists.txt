@@ -30,3 +30,10 @@ endforeach()
 add_test(NAME randomized.verifier
   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/randomized_ir.py"
     --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013)
+
+find_program(FORGE_CLANG NAMES clang clang-18 HINTS "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
+add_test(NAME differential.execution
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/differential/run_differential.py"
+    --clang "${FORGE_CLANG}" --opt "${FORGE_OPT}"
+    --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013)
