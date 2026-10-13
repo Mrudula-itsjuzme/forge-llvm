@@ -13,6 +13,7 @@
 #endif
 
 static volatile uint64_t sink;
+static volatile uint64_t benchmark_epoch;
 
 static uint64_t now_ns(void) {
   struct timespec t;
@@ -22,6 +23,7 @@ static uint64_t now_ns(void) {
 }
 
 NOINLINE static uint64_t reduction(const uint32_t *a, size_t n) {
+  (void)benchmark_epoch;
   uint64_t sum = 0;
   for (size_t i = 0; i < n; ++i)
     sum += a[i];
@@ -30,6 +32,7 @@ NOINLINE static uint64_t reduction(const uint32_t *a, size_t n) {
 
 NOINLINE static uint64_t dot_product(const uint32_t *a, const uint32_t *b,
                                      size_t n) {
+  (void)benchmark_epoch;
   uint64_t sum = 0;
   for (size_t i = 0; i < n; ++i)
     sum += (uint64_t)a[i] * b[i];
@@ -37,6 +40,7 @@ NOINLINE static uint64_t dot_product(const uint32_t *a, const uint32_t *b,
 }
 
 NOINLINE static uint64_t stencil(uint32_t *out, const uint32_t *in, size_t n) {
+  (void)benchmark_epoch;
   uint64_t sum = 0;
   for (size_t i = 1; i + 1 < n; ++i) {
     out[i] = in[i - 1] + 2U * in[i] + in[i + 1];
@@ -46,6 +50,7 @@ NOINLINE static uint64_t stencil(uint32_t *out, const uint32_t *in, size_t n) {
 }
 
 NOINLINE static uint64_t strided(const uint32_t *a, size_t n, size_t stride) {
+  (void)benchmark_epoch;
   uint64_t sum = 0;
   for (size_t offset = 0; offset < stride; ++offset)
     for (size_t i = offset; i < n; i += stride)
@@ -55,6 +60,7 @@ NOINLINE static uint64_t strided(const uint32_t *a, size_t n, size_t stride) {
 
 NOINLINE static uint64_t repeated_expression(const uint32_t *a,
                                               const uint32_t *b, size_t n) {
+  (void)benchmark_epoch;
   uint64_t sum = 0;
   for (size_t i = 0; i < n; ++i) {
     uint32_t x = a[i] + b[i];
@@ -65,6 +71,7 @@ NOINLINE static uint64_t repeated_expression(const uint32_t *a,
 }
 
 NOINLINE static uint64_t loop_recurrence(uint64_t seed, size_t n) {
+  (void)benchmark_epoch;
   for (size_t i = 0; i < n; ++i) {
     uint64_t invariant = seed * UINT64_C(33);
     seed = (seed ^ invariant) + i;
@@ -74,6 +81,7 @@ NOINLINE static uint64_t loop_recurrence(uint64_t seed, size_t n) {
 
 NOINLINE static uint64_t matrix_multiply(const uint32_t *a, const uint32_t *b,
                                          uint64_t *c, size_t n) {
+  (void)benchmark_epoch;
   memset(c, 0, n * n * sizeof(*c));
   for (size_t i = 0; i < n; ++i)
     for (size_t k = 0; k < n; ++k)
@@ -127,6 +135,7 @@ int main(int argc, char **argv) {
     uint64_t start, value;
 #define RUN(ID, NAME, EXPR)                                                     \
     do {                                                                        \
+      benchmark_epoch = trial + 1U;                                             \
       start = now_ns();                                                         \
       value = (EXPR);                                                           \
       uint64_t elapsed = now_ns() - start;                                      \
@@ -156,4 +165,3 @@ int main(int argc, char **argv) {
   free(a);
   return 0;
 }
-

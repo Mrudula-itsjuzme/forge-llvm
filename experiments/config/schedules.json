@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "schedules": [
+    {
+      "id": "minimal",
+      "pipeline": "mem2reg",
+      "purpose": "Minimal SSA baseline"
+    },
+    {
+      "id": "forge-local-global-licm",
+      "pipeline": "mem2reg,forge-local-cse,forge-global-cse,forge-licm",
+      "purpose": "Canonical Forge order"
+    },
+    {
+      "id": "forge-licm-global-local",
+      "pipeline": "mem2reg,forge-licm,forge-global-cse,forge-local-cse",
+      "purpose": "Forge pass-order experiment"
+    },
+    {
+      "id": "llvm-scalar",
+      "pipeline": "mem2reg,early-cse,gvn,loop-mssa(licm)",
+      "purpose": "Comparable LLVM scalar passes"
+    },
+    {
+      "id": "O2",
+      "pipeline": "default<O2>",
+      "purpose": "Production optimization baseline"
+    },
+    {
+      "id": "O2-plus-forge",
+      "pipeline": "default<O2>,function(forge-local-cse,forge-global-cse,forge-licm)",
+      "purpose": "Incremental Forge value after O2"
+    },
+    {
+      "id": "O3",
+      "pipeline": "default<O3>",
+      "purpose": "Aggressive production baseline"
+    },
+    {
+      "id": "O3-plus-forge",
+      "pipeline": "default<O3>,function(forge-local-cse,forge-global-cse,forge-licm)",
+      "purpose": "Incremental Forge value after O3"
+    }
+  ]
+}

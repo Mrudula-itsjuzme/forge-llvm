@@ -1,6 +1,7 @@
 /build*/
 /benchmark/results/
 /analysis/results/
+/experiments/runs/
 *.profraw
 *.profdata
 .venv/
