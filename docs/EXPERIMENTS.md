@@ -46,7 +46,14 @@ Generate a report only from a saved manifest:
 
 ```bash
 python3 experiments/generate_report.py experiments/runs/<id>/manifest.json
+python3 experiments/analyze_case_studies.py experiments/runs/<id>/manifest.json
 ```
+
+The case-study analyzer pairs candidate and baseline observations by interleaved
+round, reports the median runtime ratio, and computes a deterministic percentile
+bootstrap interval. It also checks IR, assembly, and executable hashes. If code
+is identical, runtime variation is explicitly treated as measurement noise, not
+as an optimization effect.
 
 When running Docker with a bind mount, use the host UID/GID if host-side tools
 must edit generated files:

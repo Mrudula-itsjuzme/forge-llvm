@@ -42,8 +42,14 @@ with tempfile.TemporaryDirectory(prefix="forge-experiment-test-") as tmp:
     subprocess.run([
         a.python, root / "experiments" / "generate_report.py", manifest_path,
     ], check=True)
+    subprocess.run([
+        a.python, root / "experiments" / "analyze_case_studies.py", manifest_path,
+        "--bootstrap-samples", "200",
+    ], check=True)
     if not manifest_path.with_name("report.md").stat().st_size:
         raise SystemExit("Markdown report is empty")
     if not manifest_path.with_name("report.svg").stat().st_size:
         raise SystemExit("SVG report is empty")
-    print("PASS: interleaved registry, eight schedules, Markdown and SVG reports")
+    if not manifest_path.with_name("case-studies.md").stat().st_size:
+        raise SystemExit("case-study report is empty")
+    print("PASS: interleaved registry, reports, and paired case studies")
