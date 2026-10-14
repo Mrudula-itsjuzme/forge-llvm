@@ -5,4 +5,3 @@ entry:
   %r = xor i32 %x, %y
   ret i32 %r
 }
-
