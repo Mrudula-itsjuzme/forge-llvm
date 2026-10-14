@@ -20,6 +20,14 @@ comparable LLVM scalar pipeline (`early-cse`, `gvn`, and `licm`), O2/O3, and
 O2/O3 followed by Forge. Every schedule runs with identical source, workload
 size, trial count, and final code-generation command.
 
+The runner first builds every schedule, then executes one timed sample per
+kernel per schedule in each round. Schedule order is shuffled independently in
+every round with the frozen workload seed. The exact order is retained in the
+manifest. Each process performs its own untimed warm-up before the timed sample.
+This interleaving reduces systematic drift from running all samples for one
+schedule before starting the next; it does not eliminate frequency scaling,
+thermal, operating-system, or shared-host noise.
+
 The workload split is frozen in `experiments/config/workloads.json`. Reduction,
 repeated-expression, and loop-recurrence are tuning workloads. Dot product,
 stencil, strided access, and matrix multiplication are evaluation workloads.
@@ -28,8 +36,8 @@ No automatic schedule policy may inspect the evaluation split during tuning.
 Each run directory contains:
 
 - a schema-versioned manifest with commit, toolchain, hardware, invocation,
-  pipelines, correctness digest, compile time, IR counts, binary size, summary,
-  and artifact paths;
+  pipelines, correctness digest, compile time, IR counts, binary size,
+  measurement protocol, per-round schedule order, summary, and artifact paths;
 - raw CSV trials;
 - optimized IR, assembly, and executables for every schedule; and
 - generated Markdown and SVG reports.
