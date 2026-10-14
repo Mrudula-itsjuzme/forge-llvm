@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Install LLVM toolchain
-        run: sudo apt-get update && sudo apt-get install -y llvm-18-dev llvm-18-tools clang-18 ninja-build
+        run: sudo apt-get update && sudo apt-get install -y llvm-18-dev llvm-18-tools clang-18 libclang-rt-18-dev ninja-build
       - name: Configure
         run: cmake -S . -B build -G Ninja -DLLVM_DIR=$(/usr/lib/llvm-18/bin/llvm-config --cmakedir) -DCMAKE_CXX_COMPILER=clang++-18 -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
       - name: Build
