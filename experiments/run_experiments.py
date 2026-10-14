@@ -3,6 +3,7 @@ import argparse
 import csv
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import platform
@@ -25,6 +26,24 @@ def instruction_count(path):
         elif inside and line and not line.startswith(";") and not line.endswith(":"):
             count += 1
     return count
+
+
+def assembly_instruction_count(path):
+    count = 0
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if (line and not line.startswith((".", "#", ";"))
+                and not line.endswith(":") and "\t" in raw):
+            count += 1
+    return count
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def version(command):
@@ -58,6 +77,7 @@ p.add_argument("--trials", type=int, default=15)
 p.add_argument("--schedules", default="experiments/config/schedules.json")
 p.add_argument("--workloads", default="experiments/config/workloads.json")
 p.add_argument("--output-root", default="experiments/runs")
+p.add_argument("--execution-affinity", default="uncontrolled")
 a = p.parse_args()
 
 root = Path(__file__).resolve().parents[1]
@@ -88,6 +108,7 @@ manifest = {
     "seed": workloads["seed"],
     "schedules": [],
 }
+manifest["hardware"]["execution_affinity"] = a.execution_affinity
 all_rows = []
 reference_digest = None
 
@@ -140,7 +161,11 @@ for schedule in schedules_doc["schedules"]:
         "correctness": {"validated": True, "digest": digest},
         "optimizer_nanoseconds": optimizer_ns,
         "ir_instruction_count": instruction_count(optimized),
+        "assembly_instruction_count": assembly_instruction_count(assembly),
         "binary_bytes": os.path.getsize(binary),
+        "artifact_sha256": {"ir": sha256(optimized),
+                            "assembly": sha256(assembly),
+                            "binary": sha256(binary)},
         "artifacts": {"ir": str(optimized.relative_to(out)),
                       "assembly": str(assembly.relative_to(out)),
                       "binary": str(binary.relative_to(out))},
