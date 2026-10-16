@@ -37,3 +37,9 @@ add_test(NAME differential.execution
     "${CMAKE_CURRENT_SOURCE_DIR}/differential/run_differential.py"
     --clang "${FORGE_CLANG}" --opt "${FORGE_OPT}"
     --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013)
+
+add_test(NAME diagnostics.structured
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/run_diagnostics.py"
+    --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>"
+    --input "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/cases.ll")

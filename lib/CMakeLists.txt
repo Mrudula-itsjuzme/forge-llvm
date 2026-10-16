@@ -1,4 +1,5 @@
 add_llvm_pass_plugin(ForgePass
+  Diagnostics.cpp
   Expression.cpp
   GlobalCSE.cpp
   LocalCSE.cpp
