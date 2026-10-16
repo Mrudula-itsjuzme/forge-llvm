@@ -9,6 +9,8 @@ import statistics
 import subprocess
 import time
 
+from validation import validate_trial_output
+
 
 def count_ir_instructions(path):
     """Count textual instructions inside function bodies (not machine instructions)."""
@@ -64,25 +66,22 @@ for name, pipeline in pipelines.items():
                "-S", raw_ir, "-o", optimized_ir]
     started = time.perf_counter_ns()
     subprocess.run(opt_cmd, check=True)
-    compile_ns = time.perf_counter_ns() - started
+    opt_ns = time.perf_counter_ns() - started
     subprocess.run([a.clang, "-O0", optimized_ir, "-o", binary], check=True)
 
     times = []
     output = None
-    for _ in range(a.trials):
+    for trial in range(a.trials):
         started = time.perf_counter_ns()
         run = subprocess.run([binary, str(a.iterations)], check=True,
                              capture_output=True, text=True)
         times.append((time.perf_counter_ns() - started) / 1e9)
         output = run.stdout.strip()
-    if expected is None:
-        expected = output
-    if output != expected:
-        raise RuntimeError(f"output mismatch for {name}: {output} != {expected}")
+        expected = validate_trial_output(expected, output, name, trial)
     results["pipelines"][name] = {
         "median_seconds": statistics.median(times),
         "all_seconds": times,
-        "opt_milliseconds": compile_ns / 1e6,
+        "opt_milliseconds": opt_ns / 1e6,
         "binary_bytes": os.path.getsize(binary),
         "ir_instruction_count": count_ir_instructions(optimized_ir),
         "output": output,
