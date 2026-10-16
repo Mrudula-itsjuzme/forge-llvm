@@ -28,11 +28,28 @@ with tempfile.TemporaryDirectory(prefix="forge-experiment-test-") as tmp:
         raise SystemExit("experiment registry did not complete all schedules")
     if not all(s["correctness"]["validated"] for s in manifest["schedules"]):
         raise SystemExit("one or more schedules failed correctness validation")
+    protocol = manifest.get("measurement_protocol", {})
+    orders = protocol.get("execution_order", [])
+    schedule_ids = {s["id"] for s in manifest["schedules"]}
+    if protocol.get("name") != "seeded-randomized-interleaved" or len(orders) != 2:
+        raise SystemExit("experiment did not record the interleaved protocol")
+    if any(set(order) != schedule_ids or len(order) != len(schedule_ids)
+           for order in orders):
+        raise SystemExit("an interleaved round did not execute every schedule once")
+    raw_rows = manifest_path.with_name("raw_trials.csv").read_text().splitlines()
+    if len(raw_rows) != 1 + 8 * 7 * 2:
+        raise SystemExit("raw trial count does not match schedules x workloads x rounds")
     subprocess.run([
         a.python, root / "experiments" / "generate_report.py", manifest_path,
+    ], check=True)
+    subprocess.run([
+        a.python, root / "experiments" / "analyze_case_studies.py", manifest_path,
+        "--bootstrap-samples", "200",
     ], check=True)
     if not manifest_path.with_name("report.md").stat().st_size:
         raise SystemExit("Markdown report is empty")
     if not manifest_path.with_name("report.svg").stat().st_size:
         raise SystemExit("SVG report is empty")
-    print("PASS: registry, eight schedules, Markdown and SVG reports")
+    if not manifest_path.with_name("case-studies.md").stat().st_size:
+        raise SystemExit("case-study report is empty")
+    print("PASS: interleaved registry, reports, and paired case studies")
