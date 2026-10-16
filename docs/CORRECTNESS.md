@@ -30,3 +30,19 @@ and seeded inputs. These tests are empirical. Alive2 integration is deferred
 until a compatible binary is available and must be reported separately from
 the current evidence.
 
+Forge v3 also generates 250 deterministic mutation cases per CI run, including
+commuted operands, CFG diamonds, semantic flags on range-limited operands, and
+SSA replacement across dominated blocks. It compiles and executes the original
+and transformed modules and compares digests. A failure preserves the seed,
+input IR, transformed IR, harness, outputs, and reproduction metadata under the
+configured failure directory.
+
+The Alive2 bridge produces a status JSON. Missing `alive-tv` exits with CTest's
+skip code and records `unavailable`; unsupported or failed checks remain
+failures/inconclusive and never become proof claims. In the current container,
+Alive2 is unavailable.
+
+The sanitizer-backed differential test is similarly dependency-aware. CI
+installs `libclang-rt-18-dev`; the current local image lacks that runtime because
+the image rebuild was blocked by a stalled package mirror, so the local result
+is explicitly SKIPPED rather than passed.
