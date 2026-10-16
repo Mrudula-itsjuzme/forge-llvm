@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/forge/experiment.schema.json",
+  "title": "Forge experiment registry record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "experiment_id",
+    "status",
+    "commit",
+    "toolchain",
+    "hardware",
+    "invocation",
+    "dataset",
+    "seed",
+    "schedules"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "experiment_id": {"type": "string"},
+    "status": {"enum": ["completed", "failed", "incomplete"]},
+    "commit": {"type": "string"},
+    "dirty_worktree": {"type": "boolean"},
+    "toolchain": {"type": "object"},
+    "hardware": {"type": "object"},
+    "invocation": {"type": "array", "items": {"type": "string"}},
+    "dataset": {"type": "object"},
+    "seed": {"type": "integer"},
+    "schedules": {"type": "array", "items": {"type": "object"}}
+  },
+  "additionalProperties": true
+}

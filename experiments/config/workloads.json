@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "seed": 20261013,
+  "tuning": [
+    "reduction",
+    "repeated-expression",
+    "loop-recurrence"
+  ],
+  "evaluation": [
+    "dot",
+    "stencil2d-row",
+    "strided-access",
+    "matrix-multiply"
+  ],
+  "policy": "Tuning workloads may inform hypotheses. Evaluation workloads remain sealed from scheduler-policy selection."
+}
