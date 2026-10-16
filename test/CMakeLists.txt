@@ -2,6 +2,11 @@ find_program(FORGE_OPT NAMES opt HINTS "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
 find_program(FORGE_FILECHECK NAMES FileCheck HINTS "${LLVM_TOOLS_BINARY_DIR}" REQUIRED)
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
+add_test(NAME benchmark.validation
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/benchmark_validation.py"
+    --source-root "${PROJECT_SOURCE_DIR}")
+
 file(GLOB_RECURSE FORGE_IR_TESTS CONFIGURE_DEPENDS
   "${CMAKE_CURRENT_SOURCE_DIR}/ir/*.ll"
   "${CMAKE_CURRENT_SOURCE_DIR}/global/*.ll"
