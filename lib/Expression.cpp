@@ -34,22 +34,40 @@ bool ExpressionKeyInfo::isEqual(const ExpressionKey &A,
   return A == B;
 }
 
-bool isEligibleIntegerExpression(const BinaryOperator &BO) {
+ExpressionRejectionReason classifyIntegerExpression(const BinaryOperator &BO) {
   if (!BO.getType()->isIntOrIntVectorTy())
-    return false;
+    return ExpressionRejectionReason::NonIntegerType;
 
   // Newer LLVM versions can attach `disjoint` semantics to Or. Forge's LLVM
   // 18 baseline has no portable query for that flag, so exclude Or entirely.
   if (BO.getOpcode() == Instruction::Or)
-    return false;
+    return ExpressionRejectionReason::UnsupportedOrSemantics;
 
   for (const Value *Operand : BO.operands()) {
     const auto *C = dyn_cast<Constant>(Operand);
     if (isa<UndefValue>(Operand) || isa<PoisonValue>(Operand) ||
         (C && C->containsUndefOrPoisonElement()))
-      return false;
+      return ExpressionRejectionReason::UndefOrPoisonOperand;
   }
-  return true;
+  return ExpressionRejectionReason::Eligible;
+}
+
+bool isEligibleIntegerExpression(const BinaryOperator &BO) {
+  return classifyIntegerExpression(BO) == ExpressionRejectionReason::Eligible;
+}
+
+StringRef rejectionReasonName(ExpressionRejectionReason Reason) {
+  switch (Reason) {
+  case ExpressionRejectionReason::Eligible:
+    return "eligible";
+  case ExpressionRejectionReason::NonIntegerType:
+    return "non_integer_type";
+  case ExpressionRejectionReason::UnsupportedOrSemantics:
+    return "unsupported_or_semantics";
+  case ExpressionRejectionReason::UndefOrPoisonOperand:
+    return "undef_or_poison_operand";
+  }
+  llvm_unreachable("unknown Forge expression rejection reason");
 }
 
 ExpressionKey makeExpressionKey(const BinaryOperator &BO) {
