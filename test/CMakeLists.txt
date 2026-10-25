@@ -43,6 +43,21 @@ add_test(NAME differential.execution
     --clang "${FORGE_CLANG}" --opt "${FORGE_OPT}"
     --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013)
 
+add_test(NAME differential.sanitized
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/differential/run_differential.py"
+    --clang "${FORGE_CLANG}" --opt "${FORGE_OPT}"
+    --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013 --sanitize
+    --allow-sanitizer-unavailable)
+set_tests_properties(differential.sanitized PROPERTIES SKIP_RETURN_CODE 77)
+
+add_test(NAME differential.mutation-stress
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/differential/mutation_stress.py"
+    --clang "${FORGE_CLANG}" --opt "${FORGE_OPT}"
+    --plugin "$<TARGET_FILE:ForgePass>" --seed 20261013 --cases 250
+    --failure-dir "${CMAKE_CURRENT_BINARY_DIR}/mutation-failures")
+
 add_test(NAME diagnostics.structured
   COMMAND "${Python3_EXECUTABLE}"
     "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/run_diagnostics.py"
@@ -55,3 +70,23 @@ add_test(NAME experiments.registry-smoke
     --python "${Python3_EXECUTABLE}" --clang "${FORGE_CLANG}"
     --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>"
     --source-root "${PROJECT_SOURCE_DIR}")
+
+find_program(FORGE_ALIVE_TV NAMES alive-tv)
+if(FORGE_ALIVE_TV)
+  add_test(NAME formal.alive2
+    COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/formal/run_alive2.py"
+      --alive-tv "${FORGE_ALIVE_TV}" --opt "${FORGE_OPT}"
+      --plugin "$<TARGET_FILE:ForgePass>"
+      --input "${CMAKE_CURRENT_SOURCE_DIR}/formal/local-cse.ll"
+      --status "${CMAKE_CURRENT_BINARY_DIR}/alive2-status.json")
+else()
+  add_test(NAME formal.alive2-unavailable
+    COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/formal/run_alive2.py"
+      --alive-tv alive-tv --opt "${FORGE_OPT}"
+      --plugin "$<TARGET_FILE:ForgePass>"
+      --input "${CMAKE_CURRENT_SOURCE_DIR}/formal/local-cse.ll"
+      --status "${CMAKE_CURRENT_BINARY_DIR}/alive2-status.json")
+  set_tests_properties(formal.alive2-unavailable PROPERTIES SKIP_RETURN_CODE 77)
+endif()
