@@ -21,13 +21,14 @@ lines = [
     f"Commit: `{data['commit']}`  ",
     f"Dataset size: {data['dataset']['size']:,}; trials: {data['dataset']['trials']}", "",
     "## Correctness and artifact summary", "",
-    "| Schedule | Validated | IR instructions | Binary bytes | Optimizer ms |", 
-    "|---|---:|---:|---:|---:|",
+    "| Schedule | Validated | IR instructions | ASM instructions | Binary bytes | Optimizer ms |",
+    "|---|---:|---:|---:|---:|---:|",
 ]
 for schedule in data["schedules"]:
     lines.append(
         f"| {schedule['id']} | {schedule['correctness']['validated']} | "
-        f"{schedule['ir_instruction_count']} | {schedule['binary_bytes']} | "
+        f"{schedule['ir_instruction_count']} | {schedule['assembly_instruction_count']} | "
+        f"{schedule['binary_bytes']} | "
         f"{schedule['optimizer_nanoseconds'] / 1e6:.3f} |")
 
 for split in ("tuning", "evaluation"):

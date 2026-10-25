@@ -3,9 +3,11 @@ import argparse
 import csv
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 from pathlib import Path
 import platform
+import random
 import shutil
 import statistics
 import subprocess
@@ -25,6 +27,24 @@ def instruction_count(path):
         elif inside and line and not line.startswith(";") and not line.endswith(":"):
             count += 1
     return count
+
+
+def assembly_instruction_count(path):
+    count = 0
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if (line and not line.startswith((".", "#", ";"))
+                and not line.endswith(":") and "\t" in raw):
+            count += 1
+    return count
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def version(command):
@@ -58,11 +78,13 @@ p.add_argument("--trials", type=int, default=15)
 p.add_argument("--schedules", default="experiments/config/schedules.json")
 p.add_argument("--workloads", default="experiments/config/workloads.json")
 p.add_argument("--output-root", default="experiments/runs")
+p.add_argument("--execution-affinity", default="uncontrolled")
 a = p.parse_args()
 
 root = Path(__file__).resolve().parents[1]
 schedules_doc = json.loads((root / a.schedules).read_text())
 workloads = json.loads((root / a.workloads).read_text())
+expected_workloads = workloads["tuning"] + workloads["evaluation"]
 timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 experiment_id = f"{timestamp}-{a.commit[:8]}"
 out = root / a.output_root / experiment_id
@@ -86,10 +108,19 @@ manifest = {
     "dataset": {"source": str(source.relative_to(root)), "size": a.size,
                 "trials": a.trials, "split": workloads},
     "seed": workloads["seed"],
+    "measurement_protocol": {
+        "name": "seeded-randomized-interleaved",
+        "unit": "one timed sample per kernel per schedule per round",
+        "warmup": "one untimed invocation per kernel and process",
+        "randomization_seed": workloads["seed"],
+        "execution_order": [],
+    },
     "schedules": [],
 }
+manifest["hardware"]["execution_affinity"] = a.execution_affinity
 all_rows = []
 reference_digest = None
+prepared = []
 
 for schedule in schedules_doc["schedules"]:
     sid = schedule["id"]
@@ -104,25 +135,56 @@ for schedule in schedules_doc["schedules"]:
     optimizer_ns = time.perf_counter_ns() - started
     subprocess.run([a.clang, "-O0", optimized, "-o", binary], check=True)
     subprocess.run([a.clang, "-O0", "-S", optimized, "-o", assembly], check=True)
-    run_command = [str(binary), str(a.size), str(a.trials)]
-    run = subprocess.run(run_command, check=True, capture_output=True, text=True)
-    rows = []
-    digest = None
-    for line in run.stdout.splitlines():
-        fields = line.split(",")
-        if fields[0] == "RESULT":
-            row = {"schedule": sid, "kernel": fields[1], "trial": int(fields[2]),
-                   "nanoseconds": int(fields[3]), "value": fields[4]}
-            rows.append(row)
-            all_rows.append(row)
-        elif fields[0] == "VALIDATION":
-            digest = fields[1]
-    if digest is None:
-        raise RuntimeError(f"missing validation digest for {sid}")
-    if reference_digest is None:
-        reference_digest = digest
-    if digest != reference_digest:
-        raise RuntimeError(f"validation mismatch for {sid}")
+    prepared.append({
+        "schedule": schedule, "sid": sid, "optimized": optimized,
+        "assembly": assembly, "binary": binary, "opt_command": opt_command,
+        "optimizer_ns": optimizer_ns, "rows": [], "digest": None,
+    })
+
+rng = random.Random(workloads["seed"])
+for trial in range(a.trials):
+    order = prepared.copy()
+    rng.shuffle(order)
+    manifest["measurement_protocol"]["execution_order"].append(
+        [item["sid"] for item in order])
+    for item in order:
+        run_command = [str(item["binary"]), str(a.size), "1"]
+        run = subprocess.run(run_command, check=True, capture_output=True, text=True)
+        digest = None
+        result_count = 0
+        observed_workloads = set()
+        for line in run.stdout.splitlines():
+            fields = line.split(",")
+            if fields[0] == "RESULT":
+                row = {"schedule": item["sid"], "kernel": fields[1],
+                       "trial": trial, "nanoseconds": int(fields[3]),
+                       "value": fields[4]}
+                item["rows"].append(row)
+                all_rows.append(row)
+                result_count += 1
+                observed_workloads.add(fields[1])
+            elif fields[0] == "VALIDATION":
+                digest = fields[1]
+        if digest is None:
+            raise RuntimeError(f"missing validation digest for {item['sid']} round {trial}")
+        if result_count != len(expected_workloads) or observed_workloads != set(expected_workloads):
+            raise RuntimeError(
+                f"workload result mismatch for {item['sid']}: expected "
+                f"{sorted(expected_workloads)}, got {sorted(observed_workloads)} "
+                f"across {result_count} rows")
+        if reference_digest is None:
+            reference_digest = digest
+        if digest != reference_digest:
+            raise RuntimeError(f"validation mismatch for {item['sid']} round {trial}")
+        item["digest"] = digest
+
+for item in prepared:
+    schedule = item["schedule"]
+    sid = item["sid"]
+    optimized = item["optimized"]
+    assembly = item["assembly"]
+    binary = item["binary"]
+    rows = item["rows"]
     summaries = {}
     for kernel in sorted({row["kernel"] for row in rows}):
         values = [row["nanoseconds"] for row in rows if row["kernel"] == kernel]
@@ -135,12 +197,16 @@ for schedule in schedules_doc["schedules"]:
         }
     manifest["schedules"].append({
         **schedule,
-        "opt_command": [str(x) for x in opt_command],
-        "run_command": run_command,
-        "correctness": {"validated": True, "digest": digest},
-        "optimizer_nanoseconds": optimizer_ns,
+        "opt_command": [str(x) for x in item["opt_command"]],
+        "run_command_template": [str(binary), str(a.size), "1"],
+        "correctness": {"validated": True, "digest": item["digest"]},
+        "optimizer_nanoseconds": item["optimizer_ns"],
         "ir_instruction_count": instruction_count(optimized),
+        "assembly_instruction_count": assembly_instruction_count(assembly),
         "binary_bytes": os.path.getsize(binary),
+        "artifact_sha256": {"ir": sha256(optimized),
+                            "assembly": sha256(assembly),
+                            "binary": sha256(binary)},
         "artifacts": {"ir": str(optimized.relative_to(out)),
                       "assembly": str(assembly.relative_to(out)),
                       "binary": str(binary.relative_to(out))},
