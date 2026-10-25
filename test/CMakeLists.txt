@@ -48,3 +48,10 @@ add_test(NAME diagnostics.structured
     "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/run_diagnostics.py"
     --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>"
     --input "${CMAKE_CURRENT_SOURCE_DIR}/diagnostics/cases.ll")
+
+add_test(NAME experiments.registry-smoke
+  COMMAND "${Python3_EXECUTABLE}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/experiments/run_registry_smoke.py"
+    --python "${Python3_EXECUTABLE}" --clang "${FORGE_CLANG}"
+    --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>"
+    --source-root "${PROJECT_SOURCE_DIR}")
