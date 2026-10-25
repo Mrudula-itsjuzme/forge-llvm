@@ -29,4 +29,3 @@ exit:
   %r = xor i32 %invariant, %unsafe
   ret i32 %r
 }
-

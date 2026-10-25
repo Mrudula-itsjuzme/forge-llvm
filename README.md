@@ -16,20 +16,21 @@ claim to replace them.
 
 ## Current evidence
 
-Forge v2 was built with LLVM/Clang 18.1.3 in Ubuntu 24.04. The current local
-feature branch passes nine CTest groups:
+Forge v3 is built with LLVM/Clang 18.1.3 in Ubuntu 24.04. The current local
+feature branch has 13 passing CTest groups, 2 explicit dependency skips, and 0
+failures:
 
 - pass-specific FileCheck and verifier regressions;
 - positive and prohibited dominance/loop transformations;
-- 100 generated verifier cases with seed `20261013`; and
-- executable differential comparison over 36 boundary combinations plus 2,000
-  deterministic generated inputs.
+- 100 generated verifier cases and 250 mutation cases with seed `20261013`;
+- executable differential comparison over boundary and deterministic inputs;
+- structured diagnostics and an auditable experiment-registry smoke test; and
+- static x86-64/AArch64 backend generation.
 
-Static code generation succeeded for x86-64-v3, AArch64 Neoverse V2, and
-Armv9-A+SVE2. `llvm-mca` succeeded for the x86-64 and Neoverse V2 scheduling
-models. A short six-pipeline, seven-kernel HPC smoke campaign produced matching
-validation digests. Those are workflow checks, not credible speedup results or
-Grace hardware measurements. Alive2 has not yet been run.
+The 21-round campaign of record uses randomized-interleaved schedule order and
+matching correctness digests. It finds mixed Forge results and no generated-code
+change when Forge follows O2/O3. Alive2 and the local sanitizer runtime remain
+explicitly unavailable. See the [v3 evidence report](docs/FORGE_V3_REPORT.md).
 
 ## Architecture
 
@@ -56,8 +57,9 @@ does not implement PHI translation, partial redundancy elimination, or memory
 value numbering. Forge LICM moves only eligible integer binary operations from
 innermost loops when a preheader exists and LLVM reports speculation safe.
 
-See [correctness](docs/CORRECTNESS.md), [workflow](docs/DEVELOPMENT_WORKFLOW.md),
-and the [v1 audit](docs/AUDIT_V1.md).
+See [correctness](docs/CORRECTNESS.md), [experiments](docs/EXPERIMENTS.md),
+[performance](docs/PERFORMANCE_REPORT.md), and the
+[v3 evidence report](docs/FORGE_V3_REPORT.md).
 
 ## Build and test
 
@@ -88,7 +90,8 @@ expression, and local opportunity counts plus the configured pipeline.
 
 ```bash
 python3 analysis/analyze_backends.py \
-  --clang clang-18 --llvm-mca /usr/lib/llvm-18/bin/llvm-mca
+  --clang clang-18 --llvm-mca /usr/lib/llvm-18/bin/llvm-mca \
+  --commit "$(git rev-parse HEAD)"
 ```
 
 This produces ignored raw artifacts and a manifest under `analysis/results/`.
@@ -98,20 +101,20 @@ It never executes AArch64 output on an x86-64 host. See
 ## HPC benchmark campaign
 
 ```bash
-python3 benchmark/scripts/run_campaign.py \
+python3 experiments/run_experiments.py \
   --clang clang-18 --opt opt \
   --plugin ./build/lib/ForgePass.so \
-  --size 200000 --trials 9
+  --commit "$(git rev-parse HEAD)" \
+  --size 5000000 --trials 21
 ```
 
 The campaign exercises matrix multiplication, reduction, dot product, stencil,
 strided traversal, repeated arithmetic, and a loop recurrence. It records raw
-trial timings, optimizer time, binary size, toolchain and host metadata, pass
-pipelines, and validation digests for minimal, O2, and O3 baselines with and
-without Forge. Benchmark output is rejected if any pipeline's digest differs.
-
-Performance claims require a full campaign on named native hardware. CI is for
-correctness and build reproducibility, not benchmark comparisons.
+trial timings, randomized execution order, optimizer time, IR and assembly
+counts, artifact hashes, binary size, toolchain and host metadata, pass
+pipelines, and validation digests for eight schedules. Benchmark output is
+rejected if any schedule's digest differs. CI remains a correctness and build
+check, not a performance-comparison environment.
 
 ## Repository map
 
@@ -130,7 +133,10 @@ correctness and build reproducibility, not benchmark comparisons.
 - LICM neither creates preheaders nor moves memory operations.
 - No general-purpose loop unroller; adding one before stronger correctness
   evidence would broaden risk without deepening the core project.
-- Alive2 refinement checks are not yet integrated.
+- Alive2 integration is present but `alive-tv` is unavailable locally, so no
+  formal-refinement result is claimed.
+- The cached local container lacks sanitizer runtimes; that test is skipped
+  locally rather than reported as passing.
 - No native AArch64 or NVIDIA Grace measurements have been made.
 
 ## Resume bullet

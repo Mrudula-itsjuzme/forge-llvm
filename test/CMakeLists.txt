@@ -71,6 +71,15 @@ add_test(NAME experiments.registry-smoke
     --opt "${FORGE_OPT}" --plugin "$<TARGET_FILE:ForgePass>"
     --source-root "${PROJECT_SOURCE_DIR}")
 
+find_program(FORGE_LLVM_MCA NAMES llvm-mca HINTS "${LLVM_TOOLS_BINARY_DIR}")
+if(FORGE_LLVM_MCA)
+  add_test(NAME backend.static-analysis
+    COMMAND "${Python3_EXECUTABLE}"
+      "${PROJECT_SOURCE_DIR}/analysis/analyze_backends.py"
+      --clang "${FORGE_CLANG}" --llvm-mca "${FORGE_LLVM_MCA}"
+      --commit ctest --output "${CMAKE_CURRENT_BINARY_DIR}/backend-smoke")
+endif()
+
 find_program(FORGE_ALIVE_TV NAMES alive-tv)
 if(FORGE_ALIVE_TV)
   add_test(NAME formal.alive2
